@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"platform-go-challenge/src/models"
 	"platform-go-challenge/src/validations"
@@ -17,25 +16,22 @@ var UserStore sync.Map // Key: userID (string), Value: []Asset
 
 // Rate limiting constants
 const (
-	rateLimit  = 5           // Max requests per minute
+	rateLimit  = 20          // Max requests per minute
 	rateWindow = time.Minute // Time window for rate limiting
 )
 
 var rateLimitStore sync.Map // Key: userID (string), Value: []time.Time
-
-//-----------------------------------------//
-//              Rate Limiting              //
-//-----------------------------------------//
 
 // Rate limit check function
 func CheckRateLimit(userID string) bool {
 	now := time.Now()
 	windowStart := now.Add(-rateWindow)
 
+	// Load or create the rate limit timestamp list for the user
 	value, _ := rateLimitStore.LoadOrStore(userID, []time.Time{})
 	timestamps := value.([]time.Time)
 
-	// Filter out timestamps outside the rate window
+	// Remove timestamps outside the window
 	var validTimestamps []time.Time
 	for _, ts := range timestamps {
 		if ts.After(windowStart) {
@@ -47,7 +43,7 @@ func CheckRateLimit(userID string) bool {
 		return false
 	}
 
-	// Store the current request timestamp
+	// Store the new timestamp
 	validTimestamps = append(validTimestamps, now)
 	rateLimitStore.Store(userID, validTimestamps)
 
@@ -64,6 +60,7 @@ func GetUserFavorites(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Prepare pagination
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	if page < 1 {
@@ -73,35 +70,52 @@ func GetUserFavorites(w http.ResponseWriter, r *http.Request) {
 		limit = 20
 	}
 
-	resultChan := make(chan []models.Asset)
+	value, ok := UserStore.Load(userID)
+	if !ok {
+		http.Error(w, "No favorites found for user", http.StatusNotFound)
+		return
+	}
 
-	go func() {
-		value, ok := UserStore.Load(userID)
-		if !ok {
-			resultChan <- []models.Asset{}
-			return
-		}
+	assets := value.([]models.Asset)
+	totalCount := len(assets)                      // Total number of items in the store
+	totalPages := (totalCount + limit - 1) / limit // Calculate total pages (rounded up)
+	start := (page - 1) * limit
+	end := start + limit
+	if start > totalCount {
+		start = totalCount
+	}
+	if end > totalCount {
+		end = totalCount
+	}
 
-		assets := value.([]models.Asset)
-		start := (page - 1) * limit
-		end := start + limit
-		if start > len(assets) {
-			start = len(assets)
-		}
-		if end > len(assets) {
-			end = len(assets)
-		}
+	paginatedAssets := assets[start:end]
 
-		resultChan <- assets[start:end]
-	}()
+	// Prepare response with pagination metadata
+	response := map[string]interface{}{
+		"data": paginatedAssets,
+		"meta": map[string]interface{}{
+			"total_count":  totalCount,
+			"total_pages":  totalPages,
+			"current_page": page,
+			"per_page":     limit,
+		},
+	}
 
-	assets := <-resultChan
-	json.NewEncoder(w).Encode(assets)
+	w.Header().Set("Content-Type", "application/json")
+
 	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
 }
 
+// Adds an Asset to User's favorite list
 func AddFavorite(w http.ResponseWriter, r *http.Request) {
 	userID := mux.Vars(r)["userID"]
+
+	// Rate limiting check
+	if !CheckRateLimit(userID) {
+		http.Error(w, "Rate limit exceeded, try again later", http.StatusTooManyRequests)
+		return
+	}
 
 	var asset models.Asset
 	if err := json.NewDecoder(r.Body).Decode(&asset); err != nil {
@@ -114,7 +128,6 @@ func AddFavorite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Determine the description dynamically based on asset type
 	var description string
 	switch asset.Type {
 	case models.Chart:
@@ -143,22 +156,35 @@ func AddFavorite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	done := make(chan bool)
-	go func() {
-		value, _ := UserStore.LoadOrStore(userID, []models.Asset{})
-		assets := value.([]models.Asset)
+	value, _ := UserStore.LoadOrStore(userID, []models.Asset{})
+	assets := value.([]models.Asset)
 
-		asset.ID = uint(len(assets) + 1)
-		asset.Description = description
+	asset.ID = uint(len(assets) + 1)
+	asset.Description = description
 
-		assets = append(assets, asset)
-		UserStore.Store(userID, assets)
-		done <- true
-	}()
-	<-done
+	assets = append(assets, asset)
+	UserStore.Store(userID, assets)
 
+	// Create response
+	response := map[string]interface{}{
+		"data": []map[string]interface{}{
+			{
+				"id":          asset.ID,
+				"type":        asset.Type,
+				"Description": asset.Description,
+				"data": map[string]interface{}{
+					"text": description,
+				},
+			},
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	fmt.Fprintf(w, "Asset added to favorites")
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
 }
 
 // Removes Favorite from User's list
@@ -173,24 +199,20 @@ func RemoveFavorite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Retrieve user's favorite assets
 	value, ok := UserStore.Load(userID)
 	if !ok {
 		http.Error(w, "User not found or no favorites exist", http.StatusNotFound)
 		return
 	}
 
-	assets, ok := value.([]models.Asset)
-	if !ok {
-		http.Error(w, "Invalid data format in store", http.StatusInternalServerError)
-		return
-	}
+	assets := value.([]models.Asset)
 
-	// Search for the asset and remove it
+	// Search for and remove the asset
 	found := false
+	var removedAsset models.Asset
 	for i, asset := range assets {
 		if asset.ID == uint(assetID) {
-			// Remove the asset from the slice
+			removedAsset = asset
 			assets = append(assets[:i], assets[i+1:]...)
 			UserStore.Store(userID, assets)
 			found = true
@@ -198,24 +220,37 @@ func RemoveFavorite(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Respond based on whether the asset was found and removed
 	if found {
+		// Prepare response
+		response := map[string]interface{}{
+			"data": []map[string]interface{}{
+				{
+					"id": removedAsset.ID,
+					"message": map[string]interface{}{
+						"text": "Asset removed from favorites",
+					},
+				},
+			},
+		}
+
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, "Asset removed from favorites")
+
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		}
 	} else {
 		http.Error(w, "Asset not found", http.StatusNotFound)
 	}
 }
 
-// Edits Favorite's description
+// EditDescription updates the description of a user's favorite asset
 func EditDescription(w http.ResponseWriter, r *http.Request) {
-	// Validate Content-Type
 	if r.Header.Get("Content-Type") != "application/json" {
 		http.Error(w, "Invalid content type", http.StatusUnsupportedMediaType)
 		return
 	}
 
-	// Extract userID and assetID from URL parameters
 	userID := mux.Vars(r)["userID"]
 	assetIDStr := mux.Vars(r)["assetID"]
 
@@ -239,34 +274,48 @@ func EditDescription(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Load the user's favorite assets
 	value, ok := UserStore.Load(userID)
 	if !ok {
 		http.Error(w, "User not found or no favorites exist", http.StatusNotFound)
 		return
 	}
 
-	assets, ok := value.([]models.Asset)
-	if !ok {
-		http.Error(w, "Invalid data format in store", http.StatusInternalServerError)
-		return
-	}
+	assets := value.([]models.Asset)
 
-	// Locate the specific asset and update its description
+	// Locate and update the asset description
 	found := false
+	var updatedAssetDetails models.Asset
 	for i, asset := range assets {
 		if asset.ID == uint(assetID) {
 			assets[i].Description = updatedAsset.Description
+			updatedAssetDetails = assets[i]
 			UserStore.Store(userID, assets)
 			found = true
 			break
 		}
 	}
 
-	// Respond based on whether the asset was found and updated
 	if found {
+		// Prepare response
+		response := map[string]interface{}{
+			"data": []map[string]interface{}{
+				{
+					"id":          updatedAssetDetails.ID,
+					"type":        updatedAssetDetails.Type,
+					"Description": updatedAssetDetails.Description,
+					"message": map[string]interface{}{
+						"text": "Asset description updated",
+					},
+				},
+			},
+		}
+
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, "Asset description updated")
+
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		}
 	} else {
 		http.Error(w, "Asset not found", http.StatusNotFound)
 	}

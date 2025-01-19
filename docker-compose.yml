@@ -16,7 +16,9 @@ services:
     container_name: main-app-test
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.test
     volumes:
-      - ./src:/app/src
-    command: ["go", "test", "./..."]
+      - .:/app
+    command: ["go", "test", "./...", "-v"]
+    environment:
+      - ENV=test

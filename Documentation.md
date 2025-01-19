@@ -9,11 +9,6 @@
 docker-compose run up -d --build
 ```
 
-## Run the app container
-```
-docker-compose run up -d
-```
-
 ## Stop the app container
 ```
 docker-compose stop
@@ -27,7 +22,7 @@ docker-compose run --rm app-test
 ## cURL commands
 ```
 curl -X GET http://localhost:8088/api/v1/users/{userID}/favorites
-curl -X GET http://localhost:8088/api/v1/users/1/favorites
+curl -X GET http://localhost:8088/api/v1/users/1/favorites?page=2&limit=1
 ```
 
 ```
@@ -41,7 +36,7 @@ curl -X POST http://localhost:8088/api/v1/users/{userID}/favorites -H "Content-T
 curl -X POST http://localhost:8088/api/v1/users/1/favorites -H "Content-Type: application/json" -d '{
   "type": "Insight",
   "data": {                                                 
-    "text": "fadsa"
+    "text": "insight-data-text"
   }                      
 }'
 ```
@@ -51,8 +46,8 @@ curl -X POST http://localhost:8088/api/v1/users/1/favorites -H "Content-Type: ap
   "type": "Chart",
   "data": {                                                 
     "title": "Target Audience Analysis",
-    "x_axis": "fadsa",
-    "y_axis": "fadsa",
+    "x_axis": "x-axis-test",
+    "y_axis": "y-axis-test",
     "data": [12.2]
   }                      
 }'
@@ -87,6 +82,3 @@ curl -X PUT http://localhost:8088/api/v1/users/1/favorites/1 -H "Content-Type: a
 
 ## Rate Limiting
 Users are restricted to 5 requests per minute to prevent abuse.
-
-## Worker Pool
-Tasks like adding, removing, or editing assets are handled asynchronously through worker goroutines.

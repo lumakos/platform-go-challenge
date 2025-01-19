@@ -7,10 +7,6 @@ import (
 	"strings"
 )
 
-//-----------------------------------------//
-//      Validation                         //
-//-----------------------------------------//
-
 func ValidateChartData(data *models.ChartData) error {
 	if data.Title == "" {
 		return fmt.Errorf("Title cannot be empty")
@@ -50,10 +46,6 @@ func ValidateAudienceData(data *models.AudienceData) error {
 }
 
 func ValidateAsset(asset *models.Asset) error {
-	// if asset.Description == "" {
-	// 	return fmt.Errorf("Description cannot be empty")
-	// }
-
 	switch asset.Type {
 	case models.Chart:
 		var chartData models.ChartData
