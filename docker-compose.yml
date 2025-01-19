@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  app:
+    container_name: main-app
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8088:8088"
+    volumes:
+      - ./src:/app/src
+    restart: always
+
+  app-test:
+    container_name: main-app-test
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./src:/app/src
+    command: ["go", "test", "./..."]
