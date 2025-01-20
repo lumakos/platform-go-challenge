@@ -1,0 +1,226 @@
+{
+	"info": {
+		"_postman_id": "f4162219-aad6-436a-a90f-21097ae8c35d",
+		"name": "GWI",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "3511774"
+	},
+	"item": [
+		{
+			"name": "http://localhost:8088/api/v1/users/1/favorites?page=1&limit=10",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8088/api/v1/users/1/favorites?page=1&limit=10",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8088",
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"1",
+						"favorites"
+					],
+					"query": [
+						{
+							"key": "page",
+							"value": "1"
+						},
+						{
+							"key": "limit",
+							"value": "10"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "http://localhost:8088/api/v1/users/1/favorites",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"type\": \"Insight\",\n  \"data\": {                                                 \n    \"text\": \"insight-data-text\"\n  }                      \n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8088/api/v1/users/1/favorites",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8088",
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"1",
+						"favorites"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "http://localhost:8088/api/v1/users/1/favorites/1",
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"description\": \"Updated description: Social media usage trends\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8088/api/v1/users/1/favorites/1",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8088",
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"1",
+						"favorites",
+						"1"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "http://localhost:8088/api/v1/users/1/favorites/1",
+			"request": {
+				"method": "DELETE",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "http://localhost:8088/api/v1/users/1/favorites/1",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8088",
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"1",
+						"favorites",
+						"1"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "http://localhost:8088/api/v1/users/1/favorites",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"type\": \"Audience\",\n  \"data\": {                                                 \n    \"gender\": \"female\", \n    \"birth_country\": \"Greece\",\n    \"age_range\": \"25-34\",\n    \"social_media_usage\": 12.4,\n    \"purchases_last_month\": 15\n  }\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8088/api/v1/users/1/favorites",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8088",
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"1",
+						"favorites"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "http://localhost:8088/api/v1/users/1/favorites",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"type\": \"Chart\",\n  \"data\": {                                                 \n    \"title\": \"Target Audience Analysis\",\n    \"x_axis\": \"x-axis-test\",\n    \"y_axis\": \"y-axis-test\",\n    \"data\": [12.2]\n  }                      \n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8088/api/v1/users/1/favorites",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8088",
+					"path": [
+						"api",
+						"v1",
+						"users",
+						"1",
+						"favorites"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
