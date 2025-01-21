@@ -72,7 +72,18 @@ func GetUserFavorites(w http.ResponseWriter, r *http.Request) {
 
 	value, ok := UserStore.Load(userID)
 	if !ok {
-		http.Error(w, "No favorites found for user", http.StatusNotFound)
+		response := map[string]interface{}{
+			"data": []models.Asset{},
+			"meta": map[string]interface{}{
+				"total_count":  0,
+				"total_pages":  0,
+				"current_page": page,
+				"per_page":     limit,
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(response)
 		return
 	}
 

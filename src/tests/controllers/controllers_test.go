@@ -111,6 +111,33 @@ func TestGetUserFavorites(t *testing.T) {
 	assert.Equal(t, 3.0, meta["total_pages"])
 	assert.Equal(t, 4.0, meta["current_page"])
 	assert.Equal(t, 2.0, meta["per_page"])
+
+	// Test case where !ok (userID not found in UserStore)
+	nonExistentUserID := "999"
+	req, _ = http.NewRequest("GET", "/api/v1/users/"+nonExistentUserID+"/favorites?page=1&limit=2", nil)
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusNotFound, rr.Code)
+
+	// Check the structure of the response for non-existent user
+	err = json.NewDecoder(rr.Body).Decode(&response)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Assert the 'data' is an empty array
+	data, ok = response["data"].([]interface{})
+	assert.True(t, ok)
+	assert.Len(t, data, 0)
+
+	// Validate pagination metadata for non-existent user
+	meta, ok = response["meta"].(map[string]interface{})
+	assert.True(t, ok)
+	assert.Equal(t, 0.0, meta["total_count"])
+	assert.Equal(t, 0.0, meta["total_pages"])
+	assert.Equal(t, 1.0, meta["current_page"])
+	assert.Equal(t, 2.0, meta["per_page"])
 }
 
 func TestAddFavorite(t *testing.T) {
