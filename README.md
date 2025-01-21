@@ -259,3 +259,82 @@ Invalid input results in a 400 Bad Request error with a specific error message.
 - The UserStore keeps the favorites for each user, using a sync.Map to store the data with the user ID as the key.
 - For rate limiting, the RateLimitStore holds timestamps of each request and ensures users cannot exceed the maximum number of requests.
 - The Asset data types are validated upon receiving a request to ensure correctness before adding to a user's favorites list.
+
+## About the storage options and data representations
+We can create some related tables to store the asset data, allowing us to efficiently manage the diverse asset types, using a SQL DB.
+
+- Users: To store user information 
+- Assets: To store common attributes for assets (e.g., ID, Description, UserID, Type).
+- Asset Data: To store the unique data for each asset type, such as chart data, insight text, and audience information.
+- User Favorites: To store user's favorite assets
+
+> users
+```
+CREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(255) UNIQUE NOT NULL
+);
+```
+
+> assets
+```
+CREATE TABLE assets (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    type ENUM('Chart', 'Insight', 'Audience') NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+```
+
+> chart_data
+```
+CREATE TABLE chart_data (
+    asset_id INT PRIMARY KEY,
+    title VARCHAR(255),
+    x_axis VARCHAR(255),
+    y_axis VARCHAR(255),
+    data JSON,
+    FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE
+);
+```
+> insight_data
+```
+CREATE TABLE insight_data (
+    asset_id INT PRIMARY KEY,
+    text TEXT,
+    FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE
+);
+```
+> audience_data
+```
+CREATE TABLE audience_data (
+    asset_id INT PRIMARY KEY,
+    gender ENUM('male', 'female') NOT NULL,
+    birth_country VARCHAR(255),
+    age_range VARCHAR(255),
+    social_media_usage FLOAT,
+    purchases_last_month INT,
+    FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE
+);
+```
+> user_favorites
+```
+CREATE TABLE user_favorites (
+    user_id VARCHAR(255),
+    asset_id INT,
+    PRIMARY KEY (user_id, asset_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE
+);
+```
+
+- Users to Assets: W can store the common asset data in the assets table. The user_favorites table now explicitly defines which assets belong to which users, creating a many-to-many relationship.
+
+- Assets to Specific Data: Each asset type (Chart, Insight, Audience) has its own data table (chart_data, insight_data, audience_data). These tables store the type-specific details, with each table having a foreign key pointing back to the assets table.
+
+- Favorites: We can store this relationship in the user_favorites table.
+
+Additionally, we can use Redis into our system for these cases:
+1. User session, to store session info like userId, login etc
+2. Rate limiting, to track how many times a user has performed a particulat action within a given time
