@@ -210,9 +210,7 @@ func TestRemoveFavorite(t *testing.T) {
 	}
 
 	assets, ok = value.([]models.Asset)
-	// Assert that only one asset remains in the user's favorites
 	assert.Len(t, assets, 1)
-	// Assert that the remaining asset has the correct description
 	assert.Equal(t, "Insight 2", assets[0].Description)
 }
 
