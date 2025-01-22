@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"platform-go-challenge/src/helpers"
 	"platform-go-challenge/src/models"
 	"platform-go-challenge/src/validations"
 	"strconv"
@@ -30,29 +31,29 @@ func GetUserFavorites(w http.ResponseWriter, r *http.Request) {
 
 	// Check for rate limiting
 	if !CheckRateLimit(userID) {
-		respondWithError(w, http.StatusTooManyRequests, "Rate limit exceeded, try again later")
+		helpers.RespondWithError(w, http.StatusTooManyRequests, "Rate limit exceeded, try again later")
 		return
 	}
 
-	page, limit := parsePagination(r)
+	page, limit := helpers.ParsePagination(r)
 
 	assets, err := getUserFavorites(userID)
 	if err != nil {
-		respondWithSuccess(w, http.StatusNotFound, map[string]interface{}{
+		helpers.RespondWithSuccess(w, http.StatusNotFound, map[string]interface{}{
 			"data": []map[string]interface{}{}, // Empty array if no assets
-			"meta": generatePaginationMetadata(0, 0, page, limit),
+			"meta": helpers.GeneratePaginationMetadata(0, page, limit),
 		}, true)
 		return
 	}
 
 	// Paginate the assets
 	totalCount := len(assets)
-	paginatedAssets := paginateAssets(assets, page, limit)
+	paginatedAssets := helpers.PaginateAssets(assets, page, limit)
 
 	// Send the response with the correct structure
-	respondWithSuccess(w, http.StatusOK, map[string]interface{}{
+	helpers.RespondWithSuccess(w, http.StatusOK, map[string]interface{}{
 		"data": paginatedAssets,
-		"meta": generatePaginationMetadata(totalCount, len(paginatedAssets), page, limit),
+		"meta": helpers.GeneratePaginationMetadata(totalCount, page, limit),
 	}, true)
 }
 
@@ -79,7 +80,7 @@ func AddFavorite(w http.ResponseWriter, r *http.Request) {
 
 	description, err := getDescriptionByType(asset.Type, asset.Data)
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest, err.Error())
+		helpers.RespondWithError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -118,7 +119,7 @@ func AddFavorite(w http.ResponseWriter, r *http.Request) {
 	assets = append(assets, asset)
 	UserStore.Store(userID, assets)
 
-	respondWithSuccess(w, http.StatusCreated, map[string]interface{}{
+	helpers.RespondWithSuccess(w, http.StatusCreated, map[string]interface{}{
 		"id":          asset.ID,
 		"type":        asset.Type,
 		"Description": asset.Description,
@@ -139,38 +140,38 @@ func getUserFavorites(userID string) ([]models.Asset, error) {
 
 // Updates the description of a user's favorite asset
 func EditDescription(w http.ResponseWriter, r *http.Request) {
-	if err := validateContentType(r); err != nil {
-		respondWithError(w, http.StatusUnsupportedMediaType, err.Error())
+	if err := helpers.ValidateContentType(r); err != nil {
+		helpers.RespondWithError(w, http.StatusUnsupportedMediaType, err.Error())
 		return
 	}
 
 	userID, assetID, err := parseIDs(r)
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest, err.Error())
+		helpers.RespondWithError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	if !CheckRateLimit(userID) {
-		respondWithError(w, http.StatusTooManyRequests, "Rate limit exceeded, try again later")
+		helpers.RespondWithError(w, http.StatusTooManyRequests, "Rate limit exceeded, try again later")
 		return
 	}
 
 	var updatedAsset models.Asset
-	if err := decodeRequestBody(r, &updatedAsset); err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid input")
+	if err := helpers.DecodeRequestBody(r, &updatedAsset); err != nil {
+		helpers.RespondWithError(w, http.StatusBadRequest, "Invalid input")
 		return
 	}
 
 	if err := updateAssetDescription(userID, assetID, updatedAsset.Description.(string)); err != nil {
-		if errors.Is(err, ErrUserNotFound) || errors.Is(err, ErrAssetNotFound) {
-			respondWithError(w, http.StatusNotFound, err.Error())
+		if errors.Is(err, helpers.ErrUserNotFound) || errors.Is(err, helpers.ErrAssetNotFound) {
+			helpers.RespondWithError(w, http.StatusNotFound, err.Error())
 		} else {
-			respondWithError(w, http.StatusInternalServerError, "Internal server error")
+			helpers.RespondWithError(w, http.StatusInternalServerError, "Internal server error")
 		}
 		return
 	}
 
-	respondWithSuccess(w, http.StatusOK, map[string]interface{}{
+	helpers.RespondWithSuccess(w, http.StatusOK, map[string]interface{}{
 		"message": "Asset description updated",
 	}, false)
 }
@@ -179,27 +180,27 @@ func EditDescription(w http.ResponseWriter, r *http.Request) {
 func RemoveFavorite(w http.ResponseWriter, r *http.Request) {
 	userID, assetID, err := parseIDs(r)
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest, err.Error())
+		helpers.RespondWithError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	value, ok := UserStore.Load(userID)
 	if !ok {
-		respondWithError(w, http.StatusNotFound, "User not found or no favorites exist")
+		helpers.RespondWithError(w, http.StatusNotFound, "User not found or no favorites exist")
 		return
 	}
 
 	assets := value.([]models.Asset)
 	removedAsset, updatedAssets, err := removeAssetByID(assets, uint(assetID))
 	if err != nil {
-		respondWithError(w, http.StatusNotFound, err.Error())
+		helpers.RespondWithError(w, http.StatusNotFound, err.Error())
 		return
 	}
 
 	// Store the updated assets list back into UserStore
 	UserStore.Store(userID, updatedAssets)
 
-	respondWithSuccess(w, http.StatusOK, map[string]interface{}{
+	helpers.RespondWithSuccess(w, http.StatusOK, map[string]interface{}{
 		"id": removedAsset.ID,
 		"message": map[string]interface{}{
 			"text": "Asset removed from favorites",
@@ -208,17 +209,15 @@ func RemoveFavorite(w http.ResponseWriter, r *http.Request) {
 }
 
 func removeAssetByID(assets []models.Asset, assetID uint) (models.Asset, []models.Asset, error) {
-	// Iterate over the assets slice and find the asset to remove
 	for i, asset := range assets {
 		if asset.ID == assetID {
 			removedAsset := asset
 			// Remove the asset from the slice
 			updatedAssets := append(assets[:i], assets[i+1:]...)
-			// Return the removed asset and the updated assets list
 			return removedAsset, updatedAssets, nil
 		}
 	}
-	// If the asset is not found, return an error
+
 	return models.Asset{}, assets, fmt.Errorf("Asset not found")
 }
 
@@ -250,7 +249,7 @@ func getDescriptionByType(assetType models.AssetType, data json.RawMessage) (str
 func updateAssetDescription(userID string, assetID uint64, newDescription string) error {
 	value, ok := UserStore.Load(userID)
 	if !ok {
-		return ErrUserNotFound
+		return helpers.ErrUserNotFound
 	}
 
 	assets := value.([]models.Asset)
@@ -265,7 +264,7 @@ func updateAssetDescription(userID string, assetID uint64, newDescription string
 	}
 
 	if !found {
-		return ErrAssetNotFound
+		return helpers.ErrAssetNotFound
 	}
 
 	return nil
@@ -311,90 +310,4 @@ func parseIDs(r *http.Request) (string, uint64, error) {
 	}
 
 	return userID, assetID, nil
-}
-
-var (
-	ErrUserNotFound  = errors.New("User not found or no favorites exist")
-	ErrAssetNotFound = errors.New("Asset not found")
-)
-
-// Decodes the JSON payload from the request body into a provided destination object.
-func decodeRequestBody(r *http.Request, dest interface{}) error {
-	return json.NewDecoder(r.Body).Decode(dest)
-}
-
-// Sends an HTTP error response with a specified status code and error message in JSON format.
-func respondWithError(w http.ResponseWriter, statusCode int, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"error": message,
-	})
-}
-
-// Sends an HTTP success response with a specified status code and a JSON payload.
-func respondWithSuccess(w http.ResponseWriter, statusCode int, data interface{}, isDirect bool) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(statusCode)
-	// Check if the response should be wrapped in "data" or not
-	if isDirect {
-		// Directly encode data (for GetUserFavorites and other special cases)
-		json.NewEncoder(w).Encode(data)
-	} else {
-		// Wrap data in a "data" key (for all other cases)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"data": data,
-		})
-	}
-}
-
-// Validates that the Content-Type header of the incoming HTTP request is set to application/json.
-func validateContentType(r *http.Request) error {
-	if r.Header.Get("Content-Type") != "application/json" {
-		return fmt.Errorf("Invalid content type")
-	}
-	return nil
-}
-
-// Extracts and validates pagination parameters from the request.
-func parsePagination(r *http.Request) (int, int) {
-	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-
-	if page < 1 {
-		page = 1
-	}
-	if limit < 1 {
-		limit = 20
-	}
-
-	return page, limit
-}
-
-// Handles slicing the assets for pagination based on the page and limit.
-func paginateAssets(assets []models.Asset, page, limit int) []models.Asset {
-	totalCount := len(assets)
-	start := (page - 1) * limit
-	end := start + limit
-
-	if start > totalCount {
-		start = totalCount
-	}
-	if end > totalCount {
-		end = totalCount
-	}
-
-	return assets[start:end]
-}
-
-// Generates pagination metadata to include in the response.
-func generatePaginationMetadata(totalCount, itemCount, page, limit int) map[string]interface{} {
-	totalPages := (totalCount + limit - 1) / limit // Calculate total pages (rounded up)
-
-	return map[string]interface{}{
-		"total_count":  totalCount,
-		"total_pages":  totalPages,
-		"current_page": page,
-		"per_page":     limit,
-	}
 }
