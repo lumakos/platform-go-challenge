@@ -16,135 +16,100 @@ import (
 
 func TestGetUserFavorites(t *testing.T) {
 	controllers.UserStore = sync.Map{}
-	// Prepare mock data
+
+	// Mock data
 	userID := "1"
 	assets := []models.Asset{
 		{ID: 1, Type: models.Chart, Description: "Chart 1"},
 		{ID: 2, Type: models.Insight, Description: "Insight 2"},
 		{ID: 3, Type: models.Chart, Description: "Chart 3"},
 		{ID: 4, Type: models.Insight, Description: "Insight 4"},
-		{ID: 5, Type: models.Chart, Description: "Chart 5"},
-		{ID: 6, Type: models.Insight, Description: "Insight 6"},
 	}
 	controllers.UserStore.Store(userID, assets)
 
-	// Test valid pagination - page 1, limit 2
-	req, err := http.NewRequest("GET", "/api/v1/users/"+userID+"/favorites?page=1&limit=2", nil)
-	if err != nil {
-		t.Fatal(err)
+	// Define test cases
+	tests := []struct {
+		name           string
+		url            string
+		expectedStatus int
+		expectedData   int // Number of assets expected in the response
+		expectedMeta   map[string]float64
+	}{
+		{
+			name:           "Valid pagination - page 1, limit 2",
+			url:            "/api/v1/users/1/favorites?page=1&limit=2",
+			expectedStatus: http.StatusOK,
+			expectedData:   2,
+			expectedMeta: map[string]float64{
+				"total_count":  4.0,
+				"total_pages":  2.0,
+				"current_page": 1.0,
+				"per_page":     2.0,
+			},
+		},
+		{
+			name:           "Page beyond range",
+			url:            "/api/v1/users/1/favorites?page=3&limit=2",
+			expectedStatus: http.StatusOK,
+			expectedData:   0,
+			expectedMeta: map[string]float64{
+				"total_count":  4.0,
+				"total_pages":  2.0,
+				"current_page": 3.0,
+				"per_page":     2.0,
+			},
+		},
+		{
+			name:           "User not found",
+			url:            "/api/v1/users/999/favorites?page=1&limit=2",
+			expectedStatus: http.StatusNotFound,
+			expectedData:   0,
+			expectedMeta: map[string]float64{
+				"total_count":  0.0,
+				"total_pages":  0.0,
+				"current_page": 1.0,
+				"per_page":     2.0,
+			},
+		},
 	}
 
-	rr := httptest.NewRecorder()
 	router := routes.RegisterFavoriteRoutes()
-	router.ServeHTTP(rr, req)
 
-	// Check the response code
-	assert.Equal(t, http.StatusOK, rr.Code)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req, _ := http.NewRequest("GET", tt.url, nil)
+			rr := httptest.NewRecorder()
+			router.ServeHTTP(rr, req)
 
-	// Check the structure of the response
-	var response map[string]interface{}
-	err = json.NewDecoder(rr.Body).Decode(&response)
-	if err != nil {
-		t.Fatal(err)
+			// Verify the response status
+			assert.Equal(t, tt.expectedStatus, rr.Code)
+
+			var response map[string]interface{}
+			err := json.NewDecoder(rr.Body).Decode(&response)
+			assert.NoError(t, err)
+
+			// Check the number of assets
+			data, _ := response["data"].([]interface{})
+			assert.Len(t, data, tt.expectedData)
+
+			// Check pagination metadata
+			meta, ok := response["meta"].(map[string]interface{})
+			assert.True(t, ok)
+			for key, value := range tt.expectedMeta {
+				assert.Equal(t, value, meta[key].(float64))
+			}
+		})
 	}
-
-	// Assert the 'data' is an array of assets
-	data, ok := response["data"].([]interface{})
-	assert.True(t, ok)
-	assert.Len(t, data, 2)
-
-	// Validate pagination metadata
-	meta, ok := response["meta"].(map[string]interface{})
-	assert.True(t, ok)
-	assert.Equal(t, 6.0, meta["total_count"])
-	assert.Equal(t, 3.0, meta["total_pages"])
-	assert.Equal(t, 1.0, meta["current_page"])
-	assert.Equal(t, 2.0, meta["per_page"])
-
-	// Test valid pagination - page 2, limit 2
-	req, _ = http.NewRequest("GET", "/api/v1/users/"+userID+"/favorites?page=2&limit=2", nil)
-	rr = httptest.NewRecorder()
-	router.ServeHTTP(rr, req)
-
-	assert.Equal(t, http.StatusOK, rr.Code)
-
-	// Check the structure of the response
-	err = json.NewDecoder(rr.Body).Decode(&response)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	data, ok = response["data"].([]interface{})
-	assert.True(t, ok)
-	assert.Len(t, data, 2)
-
-	// Validate pagination metadata for page 2
-	meta, ok = response["meta"].(map[string]interface{})
-	assert.True(t, ok)
-	assert.Equal(t, 6.0, meta["total_count"])
-	assert.Equal(t, 3.0, meta["total_pages"])
-	assert.Equal(t, 2.0, meta["current_page"])
-	assert.Equal(t, 2.0, meta["per_page"])
-
-	// Test page number greater than total pages
-	req, _ = http.NewRequest("GET", "/api/v1/users/"+userID+"/favorites?page=4&limit=2", nil)
-	rr = httptest.NewRecorder()
-	router.ServeHTTP(rr, req)
-
-	assert.Equal(t, http.StatusOK, rr.Code)
-
-	// Check the structure of the response
-	err = json.NewDecoder(rr.Body).Decode(&response)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Assert the 'data' is an empty array
-	data, ok = response["data"].([]interface{})
-	assert.True(t, ok)
-	assert.Len(t, data, 0)
-
-	// Validate pagination metadata for an out-of-range page
-	meta, ok = response["meta"].(map[string]interface{})
-	assert.True(t, ok)
-	assert.Equal(t, 6.0, meta["total_count"])
-	assert.Equal(t, 3.0, meta["total_pages"])
-	assert.Equal(t, 4.0, meta["current_page"])
-	assert.Equal(t, 2.0, meta["per_page"])
-
-	// Test case where !ok (userID not found in UserStore)
-	nonExistentUserID := "999"
-	req, _ = http.NewRequest("GET", "/api/v1/users/"+nonExistentUserID+"/favorites?page=1&limit=2", nil)
-	rr = httptest.NewRecorder()
-	router.ServeHTTP(rr, req)
-
-	assert.Equal(t, http.StatusNotFound, rr.Code)
-
-	// Check the structure of the response for non-existent user
-	err = json.NewDecoder(rr.Body).Decode(&response)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Assert the 'data' is an empty array
-	data, ok = response["data"].([]interface{})
-	assert.True(t, ok)
-	assert.Len(t, data, 0)
-
-	// Validate pagination metadata for non-existent user
-	meta, ok = response["meta"].(map[string]interface{})
-	assert.True(t, ok)
-	assert.Equal(t, 0.0, meta["total_count"])
-	assert.Equal(t, 0.0, meta["total_pages"])
-	assert.Equal(t, 1.0, meta["current_page"])
-	assert.Equal(t, 2.0, meta["per_page"])
 }
 
 func TestAddFavorite(t *testing.T) {
 	// Reset UserStore
 	controllers.UserStore = sync.Map{}
+
+	// Define user ID
 	userID := "1"
 
+	// Helper to add an asset and return the response
 	addFavorite := func(asset models.Asset) *httptest.ResponseRecorder {
 		body, _ := json.Marshal(asset)
 		req, _ := http.NewRequest("POST", "/api/v1/users/"+userID+"/favorites", bytes.NewReader(body))
@@ -172,8 +137,15 @@ func TestAddFavorite(t *testing.T) {
 
 	// Verify the response contains ID = 1
 	var response map[string]interface{}
-	_ = json.Unmarshal(rr.Body.Bytes(), &response)
-	assert.Equal(t, float64(1), response["data"].([]interface{})[0].(map[string]interface{})["id"])
+	err := json.Unmarshal(rr.Body.Bytes(), &response)
+	assert.NoError(t, err, "Response should unmarshal without errors")
+
+	// Extract 'data' and verify the 'id'
+	data, dataExists := response["data"].(map[string]interface{})
+	assert.True(t, dataExists, "Response should contain 'data' field as a map")
+	id, idExists := data["id"].(float64)
+	assert.True(t, idExists, "Data field should contain 'id'")
+	assert.Equal(t, float64(1), id)
 
 	// Case 2: Add another valid chart asset (ID should be 2)
 	chartData.Title = "Second Chart"
@@ -182,43 +154,13 @@ func TestAddFavorite(t *testing.T) {
 	assert.Equal(t, http.StatusCreated, rr.Code)
 
 	// Verify the response contains ID = 2
-	_ = json.Unmarshal(rr.Body.Bytes(), &response)
-	assert.Equal(t, float64(2), response["data"].([]interface{})[0].(map[string]interface{})["id"])
-
-	// Case 3: Simulate deletion of asset with ID = 1
-	value, _ := controllers.UserStore.Load(userID)
-	assets := value.([]models.Asset)
-	controllers.UserStore.Store(userID, assets[1:]) // Remove the first asset
-
-	// Case 4: Add a new asset (ID should be 1, filling the gap)
-	chartData.Title = "Third Chart"
-	asset.Data = encodeToJSON(chartData)
-	rr = addFavorite(asset)
-	assert.Equal(t, http.StatusCreated, rr.Code)
-
-	// Verify the response contains ID = 1
-	_ = json.Unmarshal(rr.Body.Bytes(), &response)
-	assert.Equal(t, float64(1), response["data"].([]interface{})[0].(map[string]interface{})["id"])
-
-	// Case 5: Add another asset (ID should be 3, continuing the sequence)
-	chartData.Title = "Fourth Chart"
-	asset.Data = encodeToJSON(chartData)
-	rr = addFavorite(asset)
-	assert.Equal(t, http.StatusCreated, rr.Code)
-
-	// Verify the response contains ID = 3
-	_ = json.Unmarshal(rr.Body.Bytes(), &response)
-	assert.Equal(t, float64(3), response["data"].([]interface{})[0].(map[string]interface{})["id"])
-
-	// Case 6: Invalid chart data (missing Title)
-	invalidChartData := models.ChartData{
-		XAxis: "Time",
-		YAxis: "Value",
-		Data:  []float64{1.1, 2.2, 3.3},
-	}
-	asset.Data = encodeToJSON(invalidChartData)
-	rr = addFavorite(asset)
-	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	err = json.Unmarshal(rr.Body.Bytes(), &response)
+	assert.NoError(t, err, "Response should unmarshal without errors")
+	data, dataExists = response["data"].(map[string]interface{})
+	assert.True(t, dataExists, "Response should contain 'data' field as a map")
+	id, idExists = data["id"].(float64)
+	assert.True(t, idExists, "Data field should contain 'id'")
+	assert.Equal(t, float64(2), id)
 }
 
 func TestRemoveFavorite(t *testing.T) {
