@@ -141,11 +141,22 @@ func TestGetUserFavorites(t *testing.T) {
 }
 
 func TestAddFavorite(t *testing.T) {
-	// New empty map
+	// Reset UserStore
 	controllers.UserStore = sync.Map{}
-
-	// Valid chart data
 	userID := "1"
+
+	addFavorite := func(asset models.Asset) *httptest.ResponseRecorder {
+		body, _ := json.Marshal(asset)
+		req, _ := http.NewRequest("POST", "/api/v1/users/"+userID+"/favorites", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+
+		rr := httptest.NewRecorder()
+		router := routes.RegisterFavoriteRoutes()
+		router.ServeHTTP(rr, req)
+		return rr
+	}
+
+	// Case 1: Add a valid chart asset
 	chartData := models.ChartData{
 		Title: "Chart Title",
 		XAxis: "Time",
@@ -156,31 +167,57 @@ func TestAddFavorite(t *testing.T) {
 		Type: models.Chart,
 		Data: encodeToJSON(chartData),
 	}
-
-	body, _ := json.Marshal(asset)
-	req, _ := http.NewRequest("POST", "/api/v1/users/"+userID+"/favorites", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-
-	rr := httptest.NewRecorder()
-	router := routes.RegisterFavoriteRoutes()
-	router.ServeHTTP(rr, req)
-
+	rr := addFavorite(asset)
 	assert.Equal(t, http.StatusCreated, rr.Code)
 
-	// Invalid chart data (missing Title)
+	// Verify the response contains ID = 1
+	var response map[string]interface{}
+	_ = json.Unmarshal(rr.Body.Bytes(), &response)
+	assert.Equal(t, float64(1), response["data"].([]interface{})[0].(map[string]interface{})["id"])
+
+	// Case 2: Add another valid chart asset (ID should be 2)
+	chartData.Title = "Second Chart"
+	asset.Data = encodeToJSON(chartData)
+	rr = addFavorite(asset)
+	assert.Equal(t, http.StatusCreated, rr.Code)
+
+	// Verify the response contains ID = 2
+	_ = json.Unmarshal(rr.Body.Bytes(), &response)
+	assert.Equal(t, float64(2), response["data"].([]interface{})[0].(map[string]interface{})["id"])
+
+	// Case 3: Simulate deletion of asset with ID = 1
+	value, _ := controllers.UserStore.Load(userID)
+	assets := value.([]models.Asset)
+	controllers.UserStore.Store(userID, assets[1:]) // Remove the first asset
+
+	// Case 4: Add a new asset (ID should be 1, filling the gap)
+	chartData.Title = "Third Chart"
+	asset.Data = encodeToJSON(chartData)
+	rr = addFavorite(asset)
+	assert.Equal(t, http.StatusCreated, rr.Code)
+
+	// Verify the response contains ID = 1
+	_ = json.Unmarshal(rr.Body.Bytes(), &response)
+	assert.Equal(t, float64(1), response["data"].([]interface{})[0].(map[string]interface{})["id"])
+
+	// Case 5: Add another asset (ID should be 3, continuing the sequence)
+	chartData.Title = "Fourth Chart"
+	asset.Data = encodeToJSON(chartData)
+	rr = addFavorite(asset)
+	assert.Equal(t, http.StatusCreated, rr.Code)
+
+	// Verify the response contains ID = 3
+	_ = json.Unmarshal(rr.Body.Bytes(), &response)
+	assert.Equal(t, float64(3), response["data"].([]interface{})[0].(map[string]interface{})["id"])
+
+	// Case 6: Invalid chart data (missing Title)
 	invalidChartData := models.ChartData{
 		XAxis: "Time",
 		YAxis: "Value",
 		Data:  []float64{1.1, 2.2, 3.3},
 	}
 	asset.Data = encodeToJSON(invalidChartData)
-	body, _ = json.Marshal(asset)
-	req, _ = http.NewRequest("POST", "/api/v1/users/"+userID+"/favorites", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-
-	rr = httptest.NewRecorder()
-	router.ServeHTTP(rr, req)
-
+	rr = addFavorite(asset)
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
 
@@ -202,15 +239,19 @@ func TestRemoveFavorite(t *testing.T) {
 	router := routes.RegisterFavoriteRoutes()
 	router.ServeHTTP(rr, req)
 
+	// Assert the status code returned from the server
 	assert.Equal(t, http.StatusOK, rr.Code)
 
+	// Verify the asset removal in UserStore
 	value, ok := controllers.UserStore.Load(userID)
 	if !ok {
 		t.Fatalf("User store not found")
 	}
 
+	// Verify that the asset list only contains one item (the one with ID 2)
 	assets, ok = value.([]models.Asset)
-	assert.Len(t, assets, 1)
+	assert.True(t, ok, "Expected assets to be of type []models.Asset")
+	assert.Len(t, assets, 1) // Only one asset should remain
 	assert.Equal(t, "Insight 2", assets[0].Description)
 }
 

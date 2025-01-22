@@ -27,7 +27,6 @@ func CheckRateLimit(userID string) bool {
 	now := time.Now()
 	windowStart := now.Add(-rateWindow)
 
-	// Load or create the rate limit timestamp list for the user
 	value, _ := rateLimitStore.LoadOrStore(userID, []time.Time{})
 	timestamps := value.([]time.Time)
 
@@ -170,9 +169,35 @@ func AddFavorite(w http.ResponseWriter, r *http.Request) {
 	value, _ := UserStore.LoadOrStore(userID, []models.Asset{})
 	assets := value.([]models.Asset)
 
-	asset.ID = uint(len(assets) + 1)
+	// Create a set of existing IDs
+	existingIDs := make(map[uint]struct{})
+	var maxID uint
+	for _, a := range assets {
+		existingIDs[a.ID] = struct{}{}
+		if a.ID > maxID {
+			maxID = a.ID
+		}
+	}
+
+	// Find the smallest missing ID in the range 1 to maxID
+	var nextID uint
+	for i := uint(1); i <= maxID; i++ {
+		if _, exists := existingIDs[i]; !exists {
+			nextID = i
+			break
+		}
+	}
+
+	// If no missing ID is found, set the next ID to maxID + 1
+	if nextID == 0 {
+		nextID = maxID + 1
+	}
+
+	// Assign the next ID and set the description
+	asset.ID = nextID
 	asset.Description = description
 
+	// Add the new asset to the list
 	assets = append(assets, asset)
 	UserStore.Store(userID, assets)
 

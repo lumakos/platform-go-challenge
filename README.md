@@ -338,3 +338,19 @@ CREATE TABLE user_favorites (
 Additionally, we can use Redis into our system for these cases:
 1. User session, to store session info like userId, login etc
 2. Rate limiting, to track how many times a user has performed a particulat action within a given time
+
+### Note about assetController.go line 183
+When adding new user assets to favorites, I needed a way to generate a unique ID for each new favorite record. The challenge was to use an integer as the primary key while handling scenarios where an asset might be removed from the user's favorites. To meet this requirement, the solution involves finding and reusing the smallest missing ID within the existing range. If no IDs are missing, the next ID is simply the next sequential number (i.e., the highest existing ID plus one).
+
+<u>Steps:</u>
+
+1. Collect Existing IDs:
+    - Use a map to store existing IDs (existingIDs).
+    - Determine the highest ID (maxID) in the current list.
+2. Find the Smallest Missing ID:
+    - Iterate from 1 to maxID, checking for the first ID that is missing in existingIDs.
+3. Default to maxID + 1 if No Missing ID:
+    - If no gaps are found in the range, assign the next ID as maxID + 1.
+4. Assign the ID and Save:
+    - Use the calculated nextID as the new asset's ID.
+    - Add the asset to the list and store it in UserStore.
