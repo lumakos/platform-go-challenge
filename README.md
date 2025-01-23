@@ -195,7 +195,7 @@ curl -X PUT http://localhost:8088/api/v1/users/1/favorites/1 -H "Content-Type: a
 429: Rate limit exceeded.
 ```
 
-* <u>You can find the file "GWI.postman_collection.json" in the project root, which contains all the HTTP requests for this assignment.</u>
+* <u>You can find the file "GWI.postman_collection.json" in the project root, which contains all the HTTP requests for this assignment. Download the file, import it into Postman, and run the requests.</u>
 ---
 
 ## Build and start the app
