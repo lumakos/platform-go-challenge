@@ -7,12 +7,24 @@ import (
 	"net/http"
 	"platform-go-challenge/src/models"
 	"strconv"
+	"sync"
+	"time"
+
+	"github.com/gorilla/mux"
 )
 
 var (
 	ErrUserNotFound  = errors.New("User not found or no favorites exist")
 	ErrAssetNotFound = errors.New("Asset not found")
 )
+
+// Rate limiting constants
+const (
+	rateLimit  = 20          // Max requests per minute
+	rateWindow = time.Minute // Time window for rate limiting
+)
+
+var rateLimitStore sync.Map // Key: userID (string), Value: []time.Time
 
 // Decodes the JSON payload from the request body into a provided destination object.
 func DecodeRequestBody(r *http.Request, dest interface{}) error {
@@ -93,4 +105,44 @@ func GeneratePaginationMetadata(totalCount, page, limit int) map[string]interfac
 		"current_page": page,
 		"per_page":     limit,
 	}
+}
+
+// Parses the userID and assetID from the URL path variables in the incoming HTTP request.
+func ParseIDs(r *http.Request) (string, uint64, error) {
+	userID := mux.Vars(r)["userID"]
+	assetIDStr := mux.Vars(r)["assetID"]
+
+	assetID, err := strconv.ParseUint(assetIDStr, 10, 32)
+	if err != nil {
+		return "", 0, fmt.Errorf("Invalid asset ID")
+	}
+
+	return userID, assetID, nil
+}
+
+// Rate limit check function
+func CheckRateLimit(userID string) bool {
+	now := time.Now()
+	windowStart := now.Add(-rateWindow)
+
+	value, _ := rateLimitStore.LoadOrStore(userID, []time.Time{})
+	timestamps := value.([]time.Time)
+
+	// Remove timestamps outside the window
+	var validTimestamps []time.Time
+	for _, ts := range timestamps {
+		if ts.After(windowStart) {
+			validTimestamps = append(validTimestamps, ts)
+		}
+	}
+
+	if len(validTimestamps) >= rateLimit {
+		return false
+	}
+
+	// Store the new timestamp
+	validTimestamps = append(validTimestamps, now)
+	rateLimitStore.Store(userID, validTimestamps)
+
+	return true
 }

@@ -8,29 +8,19 @@ import (
 	"platform-go-challenge/src/helpers"
 	"platform-go-challenge/src/models"
 	"platform-go-challenge/src/validations"
-	"strconv"
 	"sync"
-	"time"
 
 	"github.com/gorilla/mux"
 )
 
 var UserStore sync.Map // Key: userID (string), Value: []Asset
 
-// Rate limiting constants
-const (
-	rateLimit  = 20          // Max requests per minute
-	rateWindow = time.Minute // Time window for rate limiting
-)
-
-var rateLimitStore sync.Map // Key: userID (string), Value: []time.Time
-
 // Gets User's Favorites
 func GetUserFavorites(w http.ResponseWriter, r *http.Request) {
 	userID := mux.Vars(r)["userID"]
 
 	// Check for rate limiting
-	if !CheckRateLimit(userID) {
+	if !helpers.CheckRateLimit(userID) {
 		helpers.RespondWithError(w, http.StatusTooManyRequests, "Rate limit exceeded, try again later")
 		return
 	}
@@ -62,7 +52,7 @@ func AddFavorite(w http.ResponseWriter, r *http.Request) {
 	userID := mux.Vars(r)["userID"]
 
 	// Rate limiting check
-	if !CheckRateLimit(userID) {
+	if !helpers.CheckRateLimit(userID) {
 		http.Error(w, "Rate limit exceeded, try again later", http.StatusTooManyRequests)
 		return
 	}
@@ -87,32 +77,11 @@ func AddFavorite(w http.ResponseWriter, r *http.Request) {
 	value, _ := UserStore.LoadOrStore(userID, []models.Asset{})
 	assets := value.([]models.Asset)
 
-	// Create a set of existing IDs
-	existingIDs := make(map[uint]struct{})
-	var maxID uint
-	for _, a := range assets {
-		existingIDs[a.ID] = struct{}{}
-		if a.ID > maxID {
-			maxID = a.ID
-		}
-	}
-
-	// Find the smallest missing ID in the range 1 to maxID
-	var nextID uint
-	for i := uint(1); i <= maxID; i++ {
-		if _, exists := existingIDs[i]; !exists {
-			nextID = i
-			break
-		}
-	}
-
-	// If no missing ID is found, set the next ID to maxID + 1
-	if nextID == 0 {
-		nextID = maxID + 1
-	}
+	// Calculate the next id
+	nextID := calculateNextId(assets)
 
 	// Assign the next ID and set the description
-	asset.ID = nextID
+	asset.ID = uint(nextID)
 	asset.Description = description
 
 	// Add the new asset to the list
@@ -129,15 +98,6 @@ func AddFavorite(w http.ResponseWriter, r *http.Request) {
 	}, false)
 }
 
-// Retrieves the user's favorite assets from the store.
-func getUserFavorites(userID string) ([]models.Asset, error) {
-	value, ok := UserStore.Load(userID)
-	if !ok {
-		return nil, fmt.Errorf("User not found or no favorites exist")
-	}
-	return value.([]models.Asset), nil
-}
-
 // Updates the description of a user's favorite asset
 func EditDescription(w http.ResponseWriter, r *http.Request) {
 	if err := helpers.ValidateContentType(r); err != nil {
@@ -145,13 +105,13 @@ func EditDescription(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, assetID, err := parseIDs(r)
+	userID, assetID, err := helpers.ParseIDs(r)
 	if err != nil {
 		helpers.RespondWithError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	if !CheckRateLimit(userID) {
+	if !helpers.CheckRateLimit(userID) {
 		helpers.RespondWithError(w, http.StatusTooManyRequests, "Rate limit exceeded, try again later")
 		return
 	}
@@ -178,7 +138,7 @@ func EditDescription(w http.ResponseWriter, r *http.Request) {
 
 // Removes Favorite from User's list
 func RemoveFavorite(w http.ResponseWriter, r *http.Request) {
-	userID, assetID, err := parseIDs(r)
+	userID, assetID, err := helpers.ParseIDs(r)
 	if err != nil {
 		helpers.RespondWithError(w, http.StatusBadRequest, err.Error())
 		return
@@ -208,6 +168,46 @@ func RemoveFavorite(w http.ResponseWriter, r *http.Request) {
 	}, false)
 }
 
+// Calculates the next Asset Id
+func calculateNextId(assets []models.Asset) int {
+	// Create a set of existing IDs
+	existingIDs := make(map[uint]struct{})
+
+	var maxID uint
+	for _, a := range assets {
+		existingIDs[a.ID] = struct{}{}
+		if a.ID > maxID {
+			maxID = a.ID
+		}
+	}
+
+	// Find the smallest missing ID in the range 1 to maxID
+	var nextID uint
+	for i := uint(1); i <= maxID; i++ {
+		if _, exists := existingIDs[i]; !exists {
+			nextID = i
+			break
+		}
+	}
+
+	// If no missing ID is found, set the next ID to maxID + 1
+	if nextID == 0 {
+		nextID = maxID + 1
+	}
+
+	return int(nextID)
+}
+
+// Retrieves the user's favorite assets from the store.
+func getUserFavorites(userID string) ([]models.Asset, error) {
+	value, ok := UserStore.Load(userID)
+	if !ok {
+		return nil, fmt.Errorf("User not found or no favorites exist")
+	}
+	return value.([]models.Asset), nil
+}
+
+// Deletes asset by id
 func removeAssetByID(assets []models.Asset, assetID uint) (models.Asset, []models.Asset, error) {
 	for i, asset := range assets {
 		if asset.ID == assetID {
@@ -221,6 +221,7 @@ func removeAssetByID(assets []models.Asset, assetID uint) (models.Asset, []model
 	return models.Asset{}, assets, fmt.Errorf("Asset not found")
 }
 
+// Retrieve asset description by type
 func getDescriptionByType(assetType models.AssetType, data json.RawMessage) (string, error) {
 	switch models.AssetType(assetType) {
 	case models.Chart:
@@ -246,6 +247,7 @@ func getDescriptionByType(assetType models.AssetType, data json.RawMessage) (str
 	}
 }
 
+// Updates asset's description
 func updateAssetDescription(userID string, assetID uint64, newDescription string) error {
 	value, ok := UserStore.Load(userID)
 	if !ok {
@@ -268,46 +270,4 @@ func updateAssetDescription(userID string, assetID uint64, newDescription string
 	}
 
 	return nil
-}
-
-// Helper Functions
-
-// Rate limit check function
-func CheckRateLimit(userID string) bool {
-	now := time.Now()
-	windowStart := now.Add(-rateWindow)
-
-	value, _ := rateLimitStore.LoadOrStore(userID, []time.Time{})
-	timestamps := value.([]time.Time)
-
-	// Remove timestamps outside the window
-	var validTimestamps []time.Time
-	for _, ts := range timestamps {
-		if ts.After(windowStart) {
-			validTimestamps = append(validTimestamps, ts)
-		}
-	}
-
-	if len(validTimestamps) >= rateLimit {
-		return false
-	}
-
-	// Store the new timestamp
-	validTimestamps = append(validTimestamps, now)
-	rateLimitStore.Store(userID, validTimestamps)
-
-	return true
-}
-
-// Parses the userID and assetID from the URL path variables in the incoming HTTP request.
-func parseIDs(r *http.Request) (string, uint64, error) {
-	userID := mux.Vars(r)["userID"]
-	assetIDStr := mux.Vars(r)["assetID"]
-
-	assetID, err := strconv.ParseUint(assetIDStr, 10, 32)
-	if err != nil {
-		return "", 0, fmt.Errorf("Invalid asset ID")
-	}
-
-	return userID, assetID, nil
 }

@@ -339,7 +339,7 @@ Additionally, we can use Redis into our system for these cases:
 1. User session, to store session info like userId, login etc
 2. Rate limiting, to track how many times a user has performed a particulat action within a given time
 
-### Note about assetController.go line 183
+### Note about function "calculateNextId()" in "assetController.go" line 182
 When adding new user assets to favorites, I needed a way to generate a unique ID for each new favorite record. The challenge was to use an integer as the primary key while handling scenarios where an asset might be removed from the user's favorites. To meet this requirement, the solution involves finding and reusing the smallest missing ID within the existing range. If no IDs are missing, the next ID is simply the next sequential number (i.e., the highest existing ID plus one).
 
 <u>Steps:</u>

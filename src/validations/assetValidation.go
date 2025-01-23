@@ -7,6 +7,7 @@ import (
 	"strings"
 )
 
+// Validates chart data
 func ValidateChartData(data *models.ChartData) error {
 	if data.Title == "" {
 		return fmt.Errorf("Title cannot be empty")
@@ -20,6 +21,7 @@ func ValidateChartData(data *models.ChartData) error {
 	return nil
 }
 
+// Validates insight data
 func ValidateInsightData(data *models.InsightData) error {
 	data.Text = strings.TrimSpace(data.Text)
 	if data.Text == "" {
@@ -31,6 +33,7 @@ func ValidateInsightData(data *models.InsightData) error {
 	return nil
 }
 
+// Validates audience data
 func ValidateAudienceData(data *models.AudienceData) error {
 	data.Gender = strings.TrimSpace(data.Gender)
 	if data.Gender != "male" && data.Gender != "female" {
@@ -45,6 +48,7 @@ func ValidateAudienceData(data *models.AudienceData) error {
 	return nil
 }
 
+// Validates Asset
 func ValidateAsset(asset *models.Asset) error {
 	switch asset.Type {
 	case models.Chart:

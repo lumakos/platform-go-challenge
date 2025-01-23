@@ -8,6 +8,10 @@ import (
 
 type AssetType string
 
+func (a AssetType) String() {
+	panic("unimplemented")
+}
+
 const (
 	Chart    AssetType = "Chart"
 	Insight  AssetType = "Insight"
