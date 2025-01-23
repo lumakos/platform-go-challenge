@@ -1,13 +1,35 @@
-# Few words about the app
-In the root of the app, there is a <b>docker-compose.yml</b> file that uses a <b>Dockerfile</b> for the main app which run on port 8088 and a <b>Dockerfile.test</b> for the test suite.
+# Few words about the application
+Below are instructions on building and running the application, as well as making HTTP requests.
+In the root of the app, there is a <b>docker-compose.yml</b> file that uses a <b>Dockerfile</b> for the main app which run on port <b>8088</b> and a <b>Dockerfile.test</b> for the test suite.
 
-### Steps
-1. Get a user's favorite assets
-2. Add an asset to favorites
-3. Remove an asset from favorites
-4. Edit an asset's description
+## How it works
+- Below are four (4) endpoints with detailed descriptions.
+- The UserStore keeps the favorites for each user, using a sync.Map to store the data with the user ID as the key.
+- For rate limiting, the RateLimitStore holds timestamps of each request and ensures users cannot exceed the maximum number of requests (20 requests/min).
+- The Asset data types are validated upon receiving a request to ensure correctness before adding to a user's favorites list.
+
+## Build and start the app
+```
+docker-compose run up -d --build
+```
+
+## Stop the app container
+```
+docker-compose stop
+```
+
+## Run tests
+```
+docker-compose run --rm app-test
+```
+
+## Running host
+```
+http://localhost:8088
+```
 
 ## API Endpoints
+
 > <b>Endpoint:</b> GET /api/v1/users/{userID}/favorites
 
 > <b>Query Parameters:</b> page,limit
@@ -198,26 +220,6 @@ curl -X PUT http://localhost:8088/api/v1/users/1/favorites/1 -H "Content-Type: a
 * <u>You can find the file "GWI.postman_collection.json" in the project root, which contains all the HTTP requests for this assignment. Download the file, import it into Postman, and run the requests.</u>
 ---
 
-## Build and start the app
-```
-docker-compose run up -d --build
-```
-
-## Stop the app container
-```
-docker-compose stop
-```
-
-## Run tests
-```
-docker-compose run --rm app-test
-```
-
-## Running host
-```
-http://localhost:8088
-```
-
 ## Rate Limiting
 - Maximum requests: 20 requests per minute per user.
 - Time window: 1 minute.
@@ -254,11 +256,6 @@ Each asset type has its own validation rules:
 - <b>Audience</b>: Gender must be "male" or "female", age range and purchases must be valid.
 
 Invalid input results in a 400 Bad Request error with a specific error message.
-
-## How it works
-- The UserStore keeps the favorites for each user, using a sync.Map to store the data with the user ID as the key.
-- For rate limiting, the RateLimitStore holds timestamps of each request and ensures users cannot exceed the maximum number of requests.
-- The Asset data types are validated upon receiving a request to ensure correctness before adding to a user's favorites list.
 
 ## About the storage options and data representations
 We can create some related tables to store the asset data, allowing us to efficiently manage the diverse asset types, using a SQL DB.
@@ -339,7 +336,7 @@ Additionally, we can use Redis into our system for these cases:
 1. User session, to store session info like userId, login etc
 2. Rate limiting, to track how many times a user has performed a particulat action within a given time
 
-### Note about function "calculateNextId()" in "assetController.go" line 182
+### <u>Note about function "calculateNextId()" in "assetController.go" line 182</u>
 When adding new user assets to favorites, I needed a way to generate a unique ID for each new favorite record. The challenge was to use an integer as the primary key while handling scenarios where an asset might be removed from the user's favorites. To meet this requirement, the solution involves finding and reusing the smallest missing ID within the existing range. If no IDs are missing, the next ID is simply the next sequential number (i.e., the highest existing ID plus one).
 
 <u>Steps:</u>
@@ -354,3 +351,5 @@ When adding new user assets to favorites, I needed a way to generate a unique ID
 4. Assign the ID and Save:
     - Use the calculated nextID as the new asset's ID.
     - Add the asset to the list and store it in UserStore.
+
+#### Thank you for the opportunity to work on this assignment. I truly appreciate the chance to showcase my skills and look forward to discussing it further!
